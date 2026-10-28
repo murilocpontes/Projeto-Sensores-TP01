@@ -11,6 +11,13 @@ import java.net.DatagramPacket
 import java.net.DatagramSocket
 import java.net.InetAddress
 
+/**
+ * Gerenciador de captura inercial e transmissão de dados para Reconhecimento de Atividade Humana (HAR).
+ *
+ * Responsável por amostrar sincronamente os sensores de acelerômetro e giroscópio a 50 Hz,
+ * estruturar janelas deslizantes de 128 amostras com 50% de sobreposição e transmiti-las
+ * assincronamente via pacotes UDP ao servidor de processamento.
+ */
 class HARDataCollector(
     private val sensorManager: SensorManager,
     private val serverIp: String,
@@ -25,28 +32,39 @@ class HARDataCollector(
     private val WINDOW_SIZE = 128
     private val OVERLAP = 64
 
-    // Controle de tempo real
+    // Controle de amostragem temporal (período de 20 ms equivalente a 50 Hz)
     private var lastSampleTimeNs = 0L
-    private val SAMPLE_PERIOD_NS = 20_000_000L // 20ms
+    private val SAMPLE_PERIOD_NS = 20_000_000L
 
+    /**
+     * Inicializa a escuta dos sensores de acelerômetro e giroscópio na taxa máxima do hardware.
+     */
     fun startCollection() {
+        // getDefaultSensor: obtém a referência para o sensor físico padrão do dispositivo
         val accel = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
         val gyro = sensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE)
 
-        // SENSOR_DELAY_FASTEST permite que o hardware nos envie os dados assim que os tiver.
-        // Nós filtraremos no Kotlin para aceitar apenas 1 amostra a cada 20ms.
+        // registerListener: vincula esta classe para receber eventos contínuos de hardware na menor latência disponível
         sensorManager.registerListener(this, accel, SensorManager.SENSOR_DELAY_FASTEST)
         sensorManager.registerListener(this, gyro, SensorManager.SENSOR_DELAY_FASTEST)
     }
 
+    /**
+     * Interrompe a leitura dos sensores e reinicializa o buffer da janela temporal.
+     */
     fun stopCollection() {
+        // unregisterListener: encerra as notificações de eventos de hardware para economizar recursos
         sensorManager.unregisterListener(this)
         windowData.clear()
         lastSampleTimeNs = 0L
     }
 
-    // Método OO puro: disparado automaticamente pelo hardware do Android
+    /**
+     * Callback acionado a cada atualização de leitura dos sensores registrados.
+     * Realiza o controle de taxa (50 Hz), montagem da janela temporal e despacho para rede.
+     */
     override fun onSensorChanged(event: SensorEvent) {
+        // copyInto: atualiza os vetores de estado com os últimos valores triaxiais lidos pelo sensor
         when (event.sensor.type) {
             Sensor.TYPE_ACCELEROMETER -> event.values.copyInto(lastAcc)
             Sensor.TYPE_GYROSCOPE -> event.values.copyInto(lastGyro)
@@ -54,10 +72,10 @@ class HARDataCollector(
 
         val currentTimeNs = event.timestamp
 
-        // Só aceita a leitura se já se passaram 20ms desde a última gravação
+        // Valida se o intervalo mínimo de amostragem (20 ms) foi atingido desde a última captura
         if (lastSampleTimeNs == 0L || (currentTimeNs - lastSampleTimeNs) >= SAMPLE_PERIOD_NS) {
 
-            // Grava a leitura física real
+            // Consolida a amostra com 6 eixos [AccX, AccY, AccZ, GyroX, GyroY, GyroZ]
             val frame = floatArrayOf(
                 lastAcc[0], lastAcc[1], lastAcc[2],
                 lastGyro[0], lastGyro[1], lastGyro[2]
@@ -66,12 +84,13 @@ class HARDataCollector(
             windowData.add(frame)
             lastSampleTimeNs = currentTimeNs
 
-            // Envia via UDP quando encher (2.56 segundos)
+            // Ao atingir 128 amostras (2,56 s), dispara o envio e aplica o deslocamento da janela
             if (windowData.size == WINDOW_SIZE) {
                 val windowToProcess = windowData.toTypedArray()
+                // transmitDataUDP: serializa e envia a janela completa ao servidor de forma assíncrona
                 transmitDataUDP(windowToProcess)
 
-                // Sliding window
+                // subList.clear: remove as 64 amostras mais antigas para manter sobreposição de 50%
                 windowData.subList(0, OVERLAP).clear()
             }
         }
@@ -79,20 +98,27 @@ class HARDataCollector(
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
 
+    /**
+     * Serializa a janela de dados em formato CSV compacto e envia via protocolo UDP.
+     */
     private fun transmitDataUDP(window: Array<FloatArray>) {
+        // CoroutineScope.launch(Dispatchers.IO): executa a operação de rede em thread dedicada de I/O
         CoroutineScope(Dispatchers.IO).launch {
             try {
+                // joinToString: formata a matriz em string delimitada por ';' (linhas) e ',' (colunas)
                 val payload = window.joinToString(";") { it.joinToString(",") }
                 val bytes = payload.toByteArray()
 
+                // InetAddress.getByName: resolve o endereço IP de destino do servidor
                 val address = InetAddress.getByName(serverIp)
                 val socket = DatagramSocket()
                 val packet = DatagramPacket(bytes, bytes.size, address, serverPort)
 
+                // socket.send: transmite o datagrama UDP pela interface de rede
                 socket.send(packet)
                 socket.close()
             } catch (e: Exception) {
-                // Erros de rede são ignorados para não quebrar a coleta
+                // Suprime falhas pontuais de transmissão para preservar a continuidade da coleta
             }
         }
     }
