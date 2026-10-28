@@ -1,0 +1,32 @@
+# =========================
+# Regras para o Android
+# =========================
+# Arquivos locais e de ambiente
+local.properties
+.idea/
+.gradle/
+*.iml
+
+# Arquivos de Build e Binários gerados
+build/
+app/build/
+*.apk
+*.aab
+
+# =========================
+# Regras para o Python
+# =========================
+# Caches de execução e binários locais
+__pycache__/
+*.py[cod]
+*.so
+
+# Ambientes Virtuais 
+venv/
+env/
+.venv/
+
+# =========================
+# Regras para Dados Pesados
+# =========================
+UCI HAR Dataset/
