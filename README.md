@@ -1,6 +1,6 @@
-# Documentação Técnica — Sistema de Reconhecimento de Atividades Humanas (HAR) em Tempo Real
+# Sistema de Reconhecimento de Atividades Humanas (HAR) em Tempo Real
 
-Este documento descreve a arquitetura, os módulos de software, o pipeline matemático e físico de pré-processamento de sinais e as especificações e métricas do modelo de Machine Learning que compõem o sistema de **Reconhecimento de Atividades Humanas (*Human Activity Recognition* — HAR)** utilizando sensores inerciais de um smartphone (**Samsung Galaxy S20 FE**) e processamento via servidor em Python.
+A seguir, serão descritas a arquitetura, os módulos de software, o pipeline matemático e físico de pré-processamento de sinais e as especificações e métricas do modelo de Machine Learning que compõem o sistema de **Reconhecimento de Atividades Humanas (*Human Activity Recognition* — HAR)** utilizando sensores inerciais de um smartphone (**Samsung Galaxy S20 FE**) e processamento via servidor em Python.
 
 A metodologia de processamento de sinais e extração de atributos fundamenta-se no artigo de referência de **Anguita et al. (2013)**, *"A Public Domain Dataset for Human Activity Recognition Using Smartphones"* ([`es2013-84.pdf`](es2013-84.pdf)).
 
